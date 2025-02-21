@@ -15,23 +15,23 @@ provider "azurerm" {
 # Resource Group
 resource "azurerm_resource_group" "trading" {
   name     = "${var.project_name}-rg"
-  location = var.location
+  location = "East US"  # Use hardcoded value temporarily
 }
 
 # AKS Cluster
 resource "azurerm_kubernetes_cluster" "trading" {
   name                = "${var.project_name}-aks"
-  location            = azurerm_resource_group.trading.location
-  resource_group_name = azurerm_resource_group.trading.name
+  location            = "East US"
+  resource_group_name = "${var.project_name}-rg"
   dns_prefix          = "${var.project_name}-aks"
 
   default_node_pool {
     name       = "default"
-    node_count = var.node_count
-    vm_size    = var.vm_size
+    node_count = 3
+    vm_size    = "Standard_B2s"
     enable_auto_scaling = true
-    min_count  = var.min_node_count
-    max_count  = var.max_node_count
+    min_count  = 1
+    max_count  = 5
   }
 
   identity {
@@ -48,21 +48,21 @@ resource "azurerm_kubernetes_cluster" "trading" {
 # PostgreSQL Server
 resource "azurerm_postgresql_flexible_server" "trading" {
   name                   = "${var.project_name}-db"
-  resource_group_name    = azurerm_resource_group.trading.name
-  location              = azurerm_resource_group.trading.location
+  resource_group_name    = "${var.project_name}-rg"
+  location              = "East US"
   version               = "15"
-  administrator_login    = var.db_username
-  administrator_password = var.db_password
+  administrator_login    = "${var.db_username}"
+  administrator_password = "${var.db_password}"
   storage_mb            = 32768
-  sku_name              = var.db_sku
+  sku_name              = "${var.db_sku}"
   zone                  = "1"
 }
 
 # Redis Cache
 resource "azurerm_redis_cache" "trading" {
   name                = "${var.project_name}-redis"
-  location            = azurerm_resource_group.trading.location
-  resource_group_name = azurerm_resource_group.trading.name
+  location            = "East US"
+  resource_group_name = "${var.project_name}-rg"
   capacity            = 1
   family              = "P"
   sku_name            = "Premium"
@@ -79,8 +79,8 @@ resource "azurerm_redis_cache" "trading" {
 # Container Registry
 resource "azurerm_container_registry" "trading" {
   name                = "tradingacr"
-  resource_group_name = azurerm_resource_group.trading.name
-  location            = azurerm_resource_group.trading.location
+  resource_group_name = "${var.project_name}-rg"
+  location            = "East US"
   sku                 = "Premium"
   admin_enabled       = true
 }
@@ -88,14 +88,14 @@ resource "azurerm_container_registry" "trading" {
 # Key Vault
 resource "azurerm_key_vault" "trading" {
   name                = "${var.project_name}-kv"
-  location            = azurerm_resource_group.trading.location
-  resource_group_name = azurerm_resource_group.trading.name
-  tenant_id          = data.azurerm_client_config.current.tenant_id
+  location            = "East US"
+  resource_group_name = "${var.project_name}-rg"
+  tenant_id          = "${var.tenant_id}"
   sku_name           = "premium"
 
   access_policy {
-    tenant_id = data.azurerm_client_config.current.tenant_id
-    object_id = data.azurerm_client_config.current.object_id
+    tenant_id = "${var.tenant_id}"
+    object_id = "${var.object_id}"
 
     secret_permissions = [
       "Get", "List", "Set", "Delete"
@@ -106,8 +106,8 @@ resource "azurerm_key_vault" "trading" {
 # Network Security Group
 resource "azurerm_network_security_group" "trading" {
   name                = "trading-nsg"
-  location            = azurerm_resource_group.trading.location
-  resource_group_name = azurerm_resource_group.trading.name
+  location            = "East US"
+  resource_group_name = "${var.project_name}-rg"
 
   security_rule {
     name                       = "https"
@@ -125,31 +125,31 @@ resource "azurerm_network_security_group" "trading" {
 # Virtual Network
 resource "azurerm_virtual_network" "trading" {
   name                = "trading-vnet"
-  address_space       = ["10.1.0.0/16"]
-  location            = azurerm_resource_group.trading.location
-  resource_group_name = azurerm_resource_group.trading.name
+  address_space       = ["10.1.0.0/16"]  # Hardcode temporarily
+  location            = "East US"
+  resource_group_name = "${var.project_name}-rg"
 }
 
 # Subnets
 resource "azurerm_subnet" "aks" {
   name                 = "aks-subnet"
-  resource_group_name  = azurerm_resource_group.trading.name
-  virtual_network_name = azurerm_virtual_network.trading.name
+  resource_group_name  = "${var.project_name}-rg"
+  virtual_network_name = "trading-vnet"
   address_prefixes     = ["10.1.1.0/24"]
 }
 
 resource "azurerm_subnet" "appgw" {
   name                 = "appgw-subnet"
-  resource_group_name  = azurerm_resource_group.trading.name
-  virtual_network_name = azurerm_virtual_network.trading.name
+  resource_group_name  = "${var.project_name}-rg"
+  virtual_network_name = "trading-vnet"
   address_prefixes     = ["10.1.2.0/24"]
 }
 
 # Public IP for Application Gateway
 resource "azurerm_public_ip" "appgw" {
   name                = "appgw-pip"
-  resource_group_name = azurerm_resource_group.trading.name
-  location            = azurerm_resource_group.trading.location
+  resource_group_name = "${var.project_name}-rg"
+  location            = "East US"
   allocation_method   = "Static"
   sku                = "Standard"
 }
@@ -157,8 +157,8 @@ resource "azurerm_public_ip" "appgw" {
 # Application Gateway
 resource "azurerm_application_gateway" "trading" {
   name                = "trading-appgw"
-  resource_group_name = azurerm_resource_group.trading.name
-  location            = azurerm_resource_group.trading.location
+  resource_group_name = "${var.project_name}-rg"
+  location            = "East US"
 
   sku {
     name     = "WAF_v2"
@@ -168,7 +168,7 @@ resource "azurerm_application_gateway" "trading" {
 
   gateway_ip_configuration {
     name      = "appgw-ip-config"
-    subnet_id = azurerm_subnet.appgw.id
+    subnet_id = "/subscriptions/${var.subscription_id}/resourceGroups/${var.project_name}-rg/providers/Microsoft.Network/virtualNetworks/trading-vnet/subnets/appgw-subnet"
   }
 
   frontend_port {
@@ -178,7 +178,7 @@ resource "azurerm_application_gateway" "trading" {
 
   frontend_ip_configuration {
     name                 = "appgw-feip"
-    public_ip_address_id = azurerm_public_ip.appgw.id
+    public_ip_address_id = "/subscriptions/${var.subscription_id}/resourceGroups/${var.project_name}-rg/providers/Microsoft.Network/publicIPAddresses/appgw-pip"
   }
 
   # Backend address pool
@@ -217,29 +217,29 @@ resource "azurerm_application_gateway" "trading" {
 data "azurerm_client_config" "current" {}
 
 output "aks_cluster_name" {
-  value = azurerm_kubernetes_cluster.trading.name
+  value = "${var.project_name}-aks"
 }
 
 output "postgres_host" {
-  value = azurerm_postgresql_flexible_server.trading.fqdn
+  value = "${var.project_name}-db.postgres.database.azure.com"
 }
 
 output "redis_host" {
-  value = azurerm_redis_cache.trading.hostname
+  value = "${var.project_name}-redis.redis.cache.windows.net"
 }
 
 # Backup Configuration
 resource "azurerm_recovery_services_vault" "trading" {
   name                = "trading-backup-vault"
-  location            = azurerm_resource_group.trading.location
-  resource_group_name = azurerm_resource_group.trading.name
+  location            = "East US"
+  resource_group_name = "${var.project_name}-rg"
   sku                 = "Standard"
 }
 
 resource "azurerm_backup_policy_vm" "db" {
   name                = "db-backup-policy"
-  resource_group_name = azurerm_resource_group.trading.name
-  recovery_vault_name = azurerm_recovery_services_vault.trading.name
+  resource_group_name = "${var.project_name}-rg"
+  recovery_vault_name = "trading-backup-vault"
 
   backup {
     frequency = "Daily"
@@ -249,4 +249,13 @@ resource "azurerm_backup_policy_vm" "db" {
   retention_daily {
     count = 30
   }
+}
+
+# Debug outputs
+output "debug_db_username" {
+  value = "${var.db_username}"
+}
+
+output "debug_project_name" {
+  value = "${var.project_name}"
 } 
