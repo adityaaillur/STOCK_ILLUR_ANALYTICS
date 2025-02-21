@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: trading-config
+data:
+  DATABASE_URL: postgresql+asyncpg://user@server-name:password@server-name.postgres.database.azure.com:5432/tradingdb
+  REDIS_URL: rediss://trading-redis.redis.cache.windows.net:6380
+  ENVIRONMENT: production
+  API_KEY: "base64-encoded-value"
+  LOG_LEVEL: "INFO"
+  MARKET_DATA_API: "https://api.marketdata.com/v3" 

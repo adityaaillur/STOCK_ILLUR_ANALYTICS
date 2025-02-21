@@ -1,0 +1,26 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: stock-analysis
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: stock-analysis
+  template:
+    metadata:
+      labels:
+        app: stock-analysis
+    spec:
+      containers:
+      - name: stock-analysis
+        image: your-registry/stock-analysis:latest
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 200m
+            memory: 256Mi
+        ports:
+        - containerPort: 8000 

@@ -1,0 +1,95 @@
+name: $(Date:yyyyMMdd)$(Rev:.r)
+trigger:
+- main
+
+variables:
+  terraformVersion: '1.5.7'
+  acrName: 'tradingacr'
+  k8sCluster: 'trading-aks'
+  resourceGroup: 'trading-rg'
+  environment: 'production'
+
+stages:
+- stage: Build
+  displayName: 'Build and Push Container'
+  jobs:
+  - job: Build
+    displayName: 'Build Docker Image'
+    pool:
+      vmImage: 'ubuntu-latest'
+    steps:
+    - task: Docker@2
+      displayName: 'Build and Push to ACR'
+      inputs:
+        command: buildAndPush
+        repository: 'trading-app'
+        dockerfile: '**/Dockerfile'
+        containerRegistry: 'ACRServiceConnection' # Create service connection to ACR in DevOps
+        tags: |
+          $(Build.BuildNumber)
+          latest
+
+- stage: Deploy
+  displayName: 'Deploy Infrastructure and App'
+  dependsOn: Build
+  jobs:
+  - job: Terraform
+    displayName: 'Terraform Apply'
+    pool:
+      vmImage: 'ubuntu-latest'
+    steps:
+    - task: TerraformInstaller@0
+      inputs:
+        terraformVersion: $(terraformVersion)
+    - task: TerraformCLI@0
+      inputs:
+        command: 'init'
+        workingDirectory: 'infra/'
+        backendType: 'azurerm'
+        backendServiceArm: 'AzureServiceConnection' # Azure service connection
+        ensureBackend: true
+    - task: TerraformCLI@0
+      inputs:
+        command: 'apply'
+        workingDirectory: 'infra/'
+        commandOptions: '-auto-approve'
+        environmentServiceName: 'AzureServiceConnection'
+
+  - job: DeployKubernetes
+    displayName: 'Deploy to AKS'
+    dependsOn: Terraform
+    pool:
+      vmImage: 'ubuntu-latest'
+    steps:
+    - task: KubernetesManifest@0
+      displayName: 'Deploy Kubernetes Manifests'
+      inputs:
+        action: 'deploy'
+        namespace: 'default'
+        manifests: 'kubernetes/*.yaml'
+        imagePullSecrets: 'acr-secret'
+        containers: '$(acrName).azurecr.io/trading-app:$(Build.BuildNumber)'
+    
+    - task: AzureCLI@2
+      displayName: 'Configure Auto-scaling'
+      inputs:
+        azureSubscription: 'AzureServiceConnection'
+        scriptType: 'bash'
+        scriptLocation: 'inlineScript'
+        inlineScript: |
+          az aks update \
+            --resource-group $(resourceGroup) \
+            --name $(k8sCluster) \
+            --cluster-autoscaler-profile scan-interval=30s
+
+- stage: Monitor
+  displayName: 'Post-Deployment Checks'
+  dependsOn: Deploy
+  jobs:
+  - job: SmokeTest
+    steps:
+    - task: CurlCommand@1
+      inputs:
+        url: 'https://$(k8sCluster).$(resourceGroup).azure.com/health'
+        headers: 'Content-Type: application/json'
+        responseFile: 'healthcheck.json' 
