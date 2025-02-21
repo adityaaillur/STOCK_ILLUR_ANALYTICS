@@ -26,5 +26,5 @@ appgw_subnet_prefix = ["10.1.2.0/24"]
 tenant_id = "a8eec281-aaa3-4dae-ac9b-9a398b9215e7"  # Get this from Azure portal or `az account show`
 
 # Azure AD Configuration
-object_id = "your-object-id"
-subscription_id = "your-subscription-id"
+object_id = "c7ad7f7f-a927-4e03-b507-7874cfae6537"
+subscription_id = "1b036bc3-d33a-4a61-a8b4-edb33458e352"
